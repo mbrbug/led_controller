@@ -6,11 +6,13 @@
 //#include "libs/FastLED/FastLED.h"
 //#define FASTLED_ALLOW_INTERRUPTS 0
 #define FASTLED_ESP8266_DMA
+#define FASTLED_INTERRUPT_RETRY_COUNT 1
+//#define FASTLED_ALLOW_INTERRUPTS 0
 #include "FastLED.h"
 #include "PubSubClient.h"
 //#include <PubSubClient.h>
 
-#define NUM_LEDS 49  // # of LEDS in the strip
+#define NUM_LEDS 27  // # of LEDS in the strip
 CRGB leds[NUM_LEDS];
 CHSV hsv[NUM_LEDS];
 //#define LEDPIN D5
@@ -20,7 +22,7 @@ CHSV hsv[NUM_LEDS];
 MDNSResponder mdns;
 
 const char* ssid = "mbr";
-const char* wifipass = "poi56789";
+const char* wifipass = "l2NBYULiCPcPPxjcPQy5ypnE";
 const char* mqtt_server = "192.168.111.2";
 
 //#define topic_scene "/myhome/in/RGBTest_scene"
@@ -30,16 +32,29 @@ const char* mqtt_server = "192.168.111.2";
 #define mqtt_item "BED"
 #define mqtt_global "/myhome/"
 
-String topic_scene_in = "/myhome/in/BED_scene";
-String topic_rgb_in = "/myhome/in/BED_rgb";
-String topic_rgb_out = "/myhome/out/BED_rgb";
-String topic_auto_in = "/myhome/out/BED_auto";
+String topic_scene_in = "/myhome/out/BED_scene/command"; //changed
+String topic_rgb_in = "/myhome/out/BED_rgb/command"; //changed
+String topic_rgb_out = "/myhome/in/BED_rgb/state"; //changed
+String topic_auto_in = "/myhome/in/BED_auto"; //changed
 String topic_RSSI = "/myhome/out/BED_RSSI";
 String topic_IP = "/myhome/out/BED_IP";
 String topic_mac = "/myhome/out/BED_mac";
 String topic_uptime = "/myhome/out/BED_uptime";
-String topic_item_in = "/myhome/in/BED";
-String topic_item_out = "/myhome/out/BED";
+//String topic_item_in = "/myhome/in/BED";
+String topic_item_out = "/myhome/in/BED/state";
+
+String topic_auto_level = "/myhome/out/BED_auto_level/command";
+
+//String topic_scene_in = "/myhome/in/BED_scene";
+//String topic_rgb_in = "/myhome/in/BED_rgb";
+//String topic_rgb_out = "/myhome/out/BED_rgb";
+//String topic_auto_in = "/myhome/out/BED_auto";
+//String topic_RSSI = "/myhome/out/BED_RSSI";
+//String topic_IP = "/myhome/out/BED_IP";
+//String topic_mac = "/myhome/out/BED_mac";
+//String topic_uptime = "/myhome/out/BED_uptime";
+//String topic_item_in = "/myhome/in/BED";
+//String topic_item_out = "/myhome/out/BED";
 
 IPAddress server(192, 168, 111, 2);
 
@@ -94,6 +109,10 @@ const char* host = HOST; //set this in userdata.h
 
 void callback(const MQTT::Publish& pub);
 void rainbow();
+void rainbow_beat();
+void rainbowbeat();
+void rainbowmarch();
+void rainbow_march();
 void fade(int autobright);
 //void bright50();
 //void bright220();
@@ -132,6 +151,14 @@ void setup() {
   FastLED.addLeds<WS2812B, LEDPIN, COLOR_ORDER>(leds, NUM_LEDS).setTemperature( Tungsten40W );
   FastLED.clear();
   FastLED.show();
+
+  LEDS.showColor(CRGB(255, 0, 0));
+  delay(300);
+  LEDS.showColor(CRGB(0, 255, 0));
+  delay(300);
+  LEDS.showColor(CRGB(0, 0, 255));
+  delay(300);
+  LEDS.showColor(CRGB(0, 0, 0));
 
   setupOTA();
 
@@ -192,24 +219,46 @@ void loop() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
+    WiFi.mode(WIFI_STA);
     if (!client.connected()) {
-      if (client.connect("BED_rgb")) {
-  client.publish("outTopic","hello world1");
-  signalStrength = WiFi.RSSI();
-  client.publish(topic_RSSI, String(signalStrength));// these topics are my choice, can change them, but then do as well in yr itemsfile
-  IP = WiFi.localIP().toString();
-  //client.publish("home/nb/weer/IP", String(IP));
-  client.publish(topic_IP, String(IP));
-  client.publish(topic_mac, String(MAC));
-  //client.publish("home/nb/weer/uptime", String(upTime));
-  client.set_callback(callback);
-  client.subscribe(topic_rgb_in);
-  client.subscribe(topic_scene_in);
-  client.subscribe("/myhome/in/BED_auto_level");
-  client.subscribe(topic_item_in);
-  //client.subscribe("OpenHab/RGB/HSL");
-  Serial.println("WiFi Connected");
+
+      Serial.println("Connecting to MQTT server");
+      if (client.connect(MQTT::Connect("led_control")
+			 .set_auth("admin", "y30TtxXvy7nJirPlvvoW"))) {
+        Serial.println("Connected to MQTT server");
+        client.publish("outTopic","hello world123");
+        client.set_callback(callback);
+        client.subscribe(topic_rgb_in);
+        client.subscribe(topic_scene_in);
+        client.subscribe(topic_auto_level);
+        //client.subscribe(topic_item_in);
+        signalStrength = WiFi.RSSI();
+        client.publish(topic_RSSI, String(signalStrength));// these topics are my choice, can change them, but then do as well in yr itemsfile
+        IP = WiFi.localIP().toString();
+        //client.publish("home/nb/weer/IP", String(IP));
+        client.publish(topic_IP, String(IP));
+        client.publish(topic_mac, String(MAC));
+        //client.publish("home/nb/weer/uptime", String(upTime));
+
+
       }
+  //    if (client.connect("BED_rgb")) {
+  //client.publish("outTopic","hello world1");
+  //signalStrength = WiFi.RSSI();
+  //client.publish(topic_RSSI, String(signalStrength));// these topics are my choice, can change them, but then do as well in yr itemsfile
+  //IP = WiFi.localIP().toString();
+  ////client.publish("home/nb/weer/IP", String(IP));
+  //client.publish(topic_IP, String(IP));
+  //client.publish(topic_mac, String(MAC));
+  //client.publish("home/nb/weer/uptime", String(upTime));
+  //client.set_callback(callback);
+  //client.subscribe(topic_rgb_in);
+  //client.subscribe(topic_scene_in);
+  //client.subscribe("/myhome/in/BED_auto_level");
+  //client.subscribe(topic_item_in);
+  //client.subscribe("OpenHab/RGB/HSL");
+  //Serial.println("WiFi Connected");
+  //    }
     }
 
     if (client.connected())
@@ -252,7 +301,8 @@ void loop() {
               button_on = false;
               rgb = false;
               auto_on = false;
-              client.publish(topic_item_out, "OFF");
+              //client.publish(topic_item_out, "OFF");
+              //mode = 0
 
            }
            else
@@ -262,8 +312,8 @@ void loop() {
              Serial.println("autolight_crgb = true");
              fade_on = true;
              button_on = true;
-             client.publish(topic_item_out, "ON");
-
+             //client.publish(topic_item_out, "ON");
+             //mode = 0
 
            }
        }
@@ -278,7 +328,7 @@ if ((light_on == false) && (animate_on == false) && (button_on == true) && (fade
   autobright = 100;
   sat = 0;
   light();
-  client.publish(topic_rgb_out, "ON");
+  //client.publish(topic_rgb_out, "ON");
 }
 
 
@@ -298,7 +348,8 @@ if ((light_on == true) && (animate_on == false) && (fade_on == true) && (rgb == 
     mode = 0;
     autobright = 0;
     light();
-    client.publish(topic_rgb_out, "OFF");
+    //client.publish(topic_rgb_out, "OFF");
+    //client.publish(topic_item_out, "OFF");
 }
 
 if ((rgb_on == true) && (fade_on == true))
@@ -307,6 +358,8 @@ if ((rgb_on == true) && (fade_on == true))
   autobright = 100;
   //sat = 0;
   light();
+  //client.publish(topic_rgb_out, "ON");
+  //client.publish(topic_item_out, "ON");
 }
 
 if ((animate_on == true) && (fade_on == true))
@@ -314,6 +367,8 @@ if ((animate_on == true) && (fade_on == true))
   //scene = 1;
   //autobright = 100;
   //sat = 0;
+  //client.publish(topic_rgb_out, "ON");
+  //client.publish(topic_item_out, "ON");
   animate();
 }
 
@@ -339,6 +394,8 @@ void light()
 {
   switch (mode) {
     case 0:
+    client.publish(topic_rgb_out, "OFF");
+    client.publish(topic_item_out, "OFF");
     Serial.println("case 0");
     fadeout();
     light_on = false;
@@ -349,6 +406,8 @@ void light()
     mode = -1;
     break;
     case 1:
+    client.publish(topic_rgb_out, "ON");
+    client.publish(topic_item_out, "ON");
     Serial.println("case 1");
     //fill_solid( leds, NUM_LEDS, CHSV(hue,sat,val));
     //FastLED.show();
@@ -373,6 +432,8 @@ void light()
 
     if (light_on == false)
       {
+        //client.publish(topic_rgb_out, "ON");
+        client.publish(topic_item_out, "ON");
         Serial.println("fade on rgb");
       for (int i = 0; i <= 255; i++)
       {
@@ -381,11 +442,15 @@ void light()
         Serial.println(i);
         delay(8);
       }
+
     } else
      {
+       //client.publish(topic_rgb_out, "ON");
+       client.publish(topic_item_out, "ON");
        Serial.print("just switch color rgb");
        fill_solid( leds, NUM_LEDS, CHSV( hue, sat, val) );
        FastLED.show();
+
     }
 
 
@@ -399,12 +464,22 @@ void animate()
 {
   switch (scene) {
     case 1:
-    rainbow();
+    //client.publish(topic_rgb_out, "ON");
+    //client.publish(topic_item_out, "ON");
+    rainbowmarch();
     break;
     case 2:
+    //client.publish(topic_rgb_out, "ON");
+    //client.publish(topic_item_out, "ON");
     cylon();
     break;
     //fade_on = false;
+    case 3:
+    rainbowbeat();
+    break;
+    case 4:
+    rainbowmarch();
+    break;
   }
 }
 
@@ -416,7 +491,8 @@ if (val < autobright) {
   client.publish(topic_rgb_out, "ON");
   for (int i = val; val < autobright; val++) {
   FastLED.setBrightness(val+1);
-  fill_solid( leds, NUM_LEDS, CRGB(255,255,255));
+  //fill_solid( leds, NUM_LEDS, CRGB(255,255,255));
+  fill_solid( leds, NUM_LEDS, CRGB(255,255,120));
   FastLED.show();
   Serial.println(val+1);
   delay(30);
@@ -427,7 +503,8 @@ if (val < autobright) {
   //client.publish(topic_rgb_out, "OFF");
   for (int i = val; val > autobright; val--) {
   FastLED.setBrightness(val-1);
-  fill_solid( leds, NUM_LEDS, CRGB(255,255,255));
+  //fill_solid( leds, NUM_LEDS, CRGB(255,255,255));
+  fill_solid( leds, NUM_LEDS, CRGB(255,255,120));
   FastLED.show();
   Serial.println(val-1);
   delay(30);
@@ -497,7 +574,7 @@ void callback(const MQTT::Publish& pub) {
   {
     uint8_t buf[BUFFER_SIZE];
     int read;
-    while (read = pub.payload_stream()->read(buf, BUFFER_SIZE))
+    while (read == pub.payload_stream()->read(buf, BUFFER_SIZE))
     {
       Serial.write(buf, read);
     }
@@ -593,7 +670,7 @@ void callback(const MQTT::Publish& pub) {
           }
       }
 
-      if (pub.topic() == "/myhome/in/BED_auto_level") {
+      if (pub.topic() == topic_auto_level) {
         autobright = pub.payload_string().toInt();
         Serial.print("autobright: ");
         Serial.println(autobright);
@@ -625,7 +702,8 @@ void callback(const MQTT::Publish& pub) {
           fade_on = true;
           auto_on = false;
           Serial.print(scene);
-
+          client.publish(topic_rgb_out, "ON");
+          client.publish(topic_item_out, "ON");
         }
         }
 
@@ -641,11 +719,44 @@ void callback(const MQTT::Publish& pub) {
             rgb = false;
             fade_on = true;
             auto_on = false;
+            client.publish(topic_rgb_out, "ON");
+            client.publish(topic_item_out, "ON");
           }
         }
 
 }
 
+void rainbowmarch()
+{
+  //rainbow_march(200, 10);
+  rainbow_march();
+  FastLED.show();
+}
+
+void rainbow_march() {     // The fill_rainbow call doesn't support brightness levels.
+
+  uint8_t thishue = millis()*(255-200)/255;             // To change the rate, add a beat or something to the result. 'thisdelay' must be a fixed value.
+
+// thishue = beat8(50);                                       // This uses a FastLED sawtooth generator. Again, the '50' should not change on the fly.
+// thishue = beatsin8(50,0,255);                              // This can change speeds on the fly. You can also add these to each other.
+
+  fill_rainbow(leds, NUM_LEDS, thishue, 10);            // Use FastLED's fill_rainbow routine.
+
+}
+
+void rainbowbeat()
+{
+  rainbow_beat();
+  FastLED.show();
+}
+
+void rainbow_beat() {
+
+  uint8_t beatA = beatsin8(17, 0, 255);                        // Starting hue
+  uint8_t beatB = beatsin8(13, 0, 255);
+  fill_rainbow(leds, NUM_LEDS, (beatA+beatB)/2, 8);            // Use FastLED's fill_rainbow routine.
+
+}
 
 void rainbow()
 {
@@ -659,10 +770,10 @@ void rainbow()
 
   void cylon()
   {
-    Serial.println("hue, sat, val");
-    Serial.print(hue);
-    Serial.print(sat);
-    Serial.println(val);
+    //Serial.println("hue, sat, val");
+    //Serial.print(hue);
+    //Serial.print(sat);
+    //Serial.println(val);
     sat = 255;
     for(int i = 0; i < NUM_LEDS; i++) {
   		// Set the i'th led to red
@@ -675,7 +786,7 @@ void rainbow()
   		// Wait a little bit before we loop around and do it again
   		delay(20);
   	}
-  	Serial.print("x");
+  	//Serial.print("x");
 
   	// Now go in the other direction.
   	for(int i = (NUM_LEDS)-1; i >= 0; i--) {
